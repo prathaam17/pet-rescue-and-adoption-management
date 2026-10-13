@@ -21,5 +21,5 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Base URL configuration
-define('BASE_URL', 'http://localhost/pet_rescue/');
+define('BASE_URL', getenv('BASE_URL') ?: 'http://localhost/pet_rescue/');
 ?>

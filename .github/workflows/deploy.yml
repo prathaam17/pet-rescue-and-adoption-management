@@ -1,0 +1,79 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: "https://prathaam17.github.io/pet-rescue-and-adoption-management/"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo, pdo_mysql, mysqli
+
+      - name: Start MySQL and Import Database
+        run: |
+          sudo systemctl start mysql
+          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; FLUSH PRIVILEGES;"
+          mysql -u root < database/database.sql
+
+      - name: Build Static Pages from PHP
+        run: |
+          mkdir -p _site/user
+          cp -r assets _site/
+          cp -r uploads _site/
+
+          for page in index about adoption vets ngos donate login register; do
+            php -r '$_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["PHP_SELF"]="/'"$page"'.php"; include "'"$page"'.php";' > "_site/${page}.html"
+          done
+
+          (cd user && php -r '$_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["PHP_SELF"]="/user/emergency.php"; include "emergency.php";') > "_site/user/emergency.html"
+
+          # Rewrite .php links to .html for static hosting compatibility
+          find _site -name "*.html" -exec sed -i \
+            -e 's/index\.php/index.html/g' \
+            -e 's/about\.php/about.html/g' \
+            -e 's/adoption\.php/adoption.html/g' \
+            -e 's/vets\.php/vets.html/g' \
+            -e 's/ngos\.php/ngos.html/g' \
+            -e 's/donate\.php/donate.html/g' \
+            -e 's/login\.php/login.html/g' \
+            -e 's/register\.php/register.html/g' \
+            -e 's/emergency\.php/emergency.html/g' {} +
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
